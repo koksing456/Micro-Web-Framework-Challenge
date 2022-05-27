@@ -5,29 +5,95 @@ const app = express()
 app.use(express.json())
 //to make a folder publicly accessible
 app.use(express.static('uploads'))
+//to unzip
+var AdmZip = require("adm-zip");
+const sharp = require('sharp');
+const path = require('path');
+const zipEntry = require('adm-zip/zipEntry');
+
+const DEFAULT_DIMENSION = 128
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/')
     },
     filename: (req, file, cb) => {
-        cb(null, new Date().toDateString() + file.originalname)
+        cb(null, file.originalname)
     }
 })
 
 const fileFilter = (req, file, cb) => {
-    if(file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'application/zip'){
+    if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'application/zip') {
         cb(null, true)
     }
     else
-        cb(new Error('the file is not a picture or zip.'), false)
+    {
+        const errorMessage = new Error('the file is not a picture or zip.')
+        cb(errorMessage, false)
+    }
+        
 }
 
-const upload = multer({storage: storage, fileFilter: fileFilter})
+const upload = multer({
+    storage: storage, fileFilter: fileFilter
+})
 
-let pictures = [
-    
-]
+let pictures = []
+
+app.post('/api/pictures', upload.single('image'), (req, res) => {
+    // const { error } = validatePicture(req.body)
+
+    // if (error) {
+    //     res.status(400).send(result.error.details[0].message)
+    //     return
+    // }
+
+    if (req.file.mimetype === 'application/zip') {
+        let zip = new AdmZip(req.file.path);
+        let zipEntries = zip.getEntries();
+        let thumbnails = []
+        zip.extractAllTo('uploads', true);
+
+        zipEntries.forEach(function (zipEntry) {
+            let extArray = zipEntry.entryName.split(".")
+            let thumbnailName = extArray[0]
+            let extension = extArray[extArray.length - 1]
+            
+            thumbnails = [`${thumbnailName}-thumbnail_1.${extension}`, `${thumbnailName}-thumbnail_2.${extension}`]
+
+            let pic = {
+                id: pictures.length + 1,
+                name: zipEntry.entryName,
+                image: `http://localhost:3000/${zipEntry.entryName}`,
+                thumbnails: [`http://localhost:3000/${thumbnails[0]}`, `http://localhost:3000/${thumbnails[1]}`]
+            }
+
+            const image = sharp(`uploads\\${zipEntry.entryName}`)
+            resizeImage(image, extension, zipEntry.entryName)
+
+            pictures.push(pic)
+        });
+        
+    } else {
+        let extArray = req.file.originalname.split(".")
+        let name = extArray[0]
+        let extension = extArray[extArray.length - 1]
+
+        const image = sharp(req.file.path)
+        resizeImage(image, extension, name)
+
+        let pic = {
+            id: pictures.length + 1,
+            name: req.file.originalname,
+            image: 'http://localhost:3000/' + req.file.path.replace('uploads\\', ''),
+            thumbnails: [`http://localhost:3000/${name}-thumbnail_1.${extension}`, `http://localhost:3000/${name}-thumbnail_2.${extension}`],
+        }
+
+        pictures.push(pic)
+    }
+
+    res.send(pictures)
+})
 
 app.get('/', (req, res) => {
     res.send('HU')
@@ -44,28 +110,6 @@ app.get('/api/pictures/:id', (req, res) => {
     }
 
     res.send(picture)
-})
-
-app.post('/api/pictures', upload.single('image'), (req, res) => {
-    // attach a picture
-    // permanent link to this picture
-    console.log(req.file);
-    // const { error } = validatePicture(req.body)
-
-    // if (error) {
-    //     res.status(400).send(result.error.details[0].message)
-    //     return
-    // }
-
-    const pic = {
-        id: pictures.length + 1,
-        originalName: req.file.originalname,
-        fileName: req.file.filename,
-        path: 'http://localhost:3000/' + req.file.path.replace('uploads\\', '')
-    }
-
-    pictures.push(pic)
-    res.send(pictures)
 })
 
 app.put('/api/pictures/:id', (req, res) => {
@@ -104,6 +148,37 @@ function validatePicture(pictures) {
     })
 
     return result = schema.validate(pictures)
+}
+
+function getResizedImageRatio(dimension, n) {
+    return Math.floor(dimension / n)
+}
+
+function resizeImage(image, extension, name) {
+
+    image.metadata() // get image metadata for size
+        .then((metadata) => {
+            const thumbnailSizes = [{ width: getResizedImageRatio(metadata.width, 4), height: getResizedImageRatio(metadata.height, 4) },
+                { width: getResizedImageRatio(metadata.width, 2), height: getResizedImageRatio(metadata.height, 2) }
+                ];
+            if (metadata.width >= DEFAULT_DIMENSION && metadata.height >= DEFAULT_DIMENSION) {
+                let n = 1
+                thumbnailSizes.forEach((t) => {
+                    console.log(t.width);
+                    image
+                        .resize({ width: t.width, height: t.height })
+                        .toFile(`uploads/${name}-thumbnail_${n}.${extension}`)
+                        .then(console.log(`Resize thumbnail ${n}`));
+                    n++
+                })
+            } else {
+                for (let i = 0; i < thumbnailSizes.length; i++) {
+                    image
+                        .resize({ width: metadata.width, height: metadata.height })
+                        .toFile(`uploads/${name}-thumbnail_${i+1}.${extension}`)
+                }
+            }
+        })
 }
 
 const port = process.env.PORT || 3000;
