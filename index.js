@@ -1,4 +1,4 @@
-const Joi = require('joi')
+// const Joi = require('joi')
 const multer = require('multer');
 const express = require('express')
 const app = express()
@@ -12,6 +12,7 @@ const path = require('path');
 const zipEntry = require('adm-zip/zipEntry');
 
 const DEFAULT_DIMENSION = 128
+let pictures = []
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -38,15 +39,8 @@ const upload = multer({
     storage: storage, fileFilter: fileFilter
 })
 
-let pictures = []
-
 app.post('/api/pictures', upload.single('image'), (req, res) => {
     // const { error } = validatePicture(req.body)
-
-    // if (error) {
-    //     res.status(400).send(result.error.details[0].message)
-    //     return
-    // }
 
     if (req.file.mimetype === 'application/zip') {
         let zip = new AdmZip(req.file.path);
@@ -73,7 +67,6 @@ app.post('/api/pictures', upload.single('image'), (req, res) => {
 
             pictures.push(pic)
         });
-        
     } else {
         let extArray = req.file.originalname.split(".")
         let name = extArray[0]
@@ -95,10 +88,6 @@ app.post('/api/pictures', upload.single('image'), (req, res) => {
     res.send(pictures)
 })
 
-app.get('/', (req, res) => {
-    res.send('HU')
-})
-
 app.get('/api/pictures', (req, res) => {
     res.send(pictures)
 })
@@ -112,21 +101,36 @@ app.get('/api/pictures/:id', (req, res) => {
     res.send(picture)
 })
 
-app.put('/api/pictures/:id', (req, res) => {
+app.put('/api/pictures/:id', upload.single('image'), (req, res) => {
 
-    const picture = pictures.find(p => p.id === parseInt(req.params.id))
+    let picture = pictures.find(p => p.id === parseInt(req.params.id))
     if (!picture) {
         return res.status(404).send('The picture with the given id cannot be found')
     }
 
-    const { error } = validatePicture(req.body)
+    // const { error } = validatePicture(req.body)
 
-    if (error) {
-        res.status(400).send(result.error.details[0].message)
-        return
-    }
+    // if (error) {
+    //     res.status(400).send(result.error.details[0].message)
+    //     return
+    // }
 
-    picture.name = req.body.name
+        let extArray = req.file.originalname.split(".")
+        let name = extArray[0]
+        let extension = extArray[extArray.length - 1]
+
+        const image = sharp(req.file.path)
+        resizeImage(image, extension, name)
+
+        picture = {
+            id: picture.id,
+            name: req.file.originalname,
+            image: 'http://localhost:3000/' + req.file.path.replace('uploads\\', ''),
+            thumbnails: [`http://localhost:3000/${name}-thumbnail_1.${extension}`, `http://localhost:3000/${name}-thumbnail_2.${extension}`],
+        }
+
+        pictures.splice(picture.id - 1, 1, picture)
+
     res.send(pictures)
 })
 
@@ -141,14 +145,14 @@ app.delete('/api/pictures/:id', (req, res) => {
     res.send(pictures)
 })
 
-function validatePicture(pictures) {
-    const schema = Joi.object({
-        name: Joi.string().min(3).required(),
-        description: Joi.string().required()
-    })
+// function validatePicture(pictures) {
+//     const schema = Joi.object({
+//         name: Joi.string().min(3).required(),
+//         description: Joi.string().required()
+//     })
 
-    return result = schema.validate(pictures)
-}
+//     return result = schema.validate(pictures)
+// }
 
 function getResizedImageRatio(dimension, n) {
     return Math.floor(dimension / n)
