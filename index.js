@@ -2,14 +2,17 @@
 const multer = require('multer');
 const express = require('express')
 const app = express()
+// parses incoming JSON requests and puts the parsed data in req.body
 app.use(express.json())
 //to make a folder publicly accessible
 app.use(express.static('uploads'))
 //to unzip
 var AdmZip = require("adm-zip");
+// to resize image
 const sharp = require('sharp');
 const path = require('path');
 const zipEntry = require('adm-zip/zipEntry');
+require('dotenv').config()
 
 const DEFAULT_DIMENSION = 128
 let pictures = []
@@ -185,5 +188,5 @@ function resizeImage(image, extension, name) {
         })
 }
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT;
 app.listen(port)
