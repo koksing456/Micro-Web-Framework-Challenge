@@ -4,7 +4,7 @@
 ## When traffic is 5
 *solution
 The solution here is like a preparation before it gains high traffic
-Order Lists:
+
   - Design a proper server architecture
   - Adopting cloud solution
     - virtual machines to handle excess traffic when the situation arises
