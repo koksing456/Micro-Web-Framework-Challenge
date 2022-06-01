@@ -24,7 +24,7 @@ To limit the requester that request the api service based on categories below:
   - Confidentiality - high traffic can cause exposure of sensitive data
   - Intergrity - may cause incomplete data transfer
   - Availability
-*solution
+- *solution
 1. API gateway
 2. Traffic Management Provider (cloudfare)
 
